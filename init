@@ -1,0 +1,76 @@
+#!/bin/sh
+
+# Parse kernel command-line arguments
+for param in $(cat /proc/cmdline); do
+    case $param in
+        kernel_url=*)
+            kernel_url="${param#kernel_url=}"
+            ;;
+        initrd_url=*)
+            initrd_url="${param#initrd_url=}"
+            ;;
+        kernel_sha=*)
+            kernel_sha="${param#kernel_sha=}"
+            ;;
+        initrd_sha=*)
+            initrd_sha="${param#initrd_sha=}"
+            ;;
+        next_kernel_params=*)
+            next_kernel_params="${param#next_kernel_params=}"
+            ;;
+    esac
+done
+
+# Default values if not provided
+kernel_url=${kernel_url:-"https://default.example.com/kernel"}
+initrd_url=${initrd_url:-"https://default.example.com/initrd.img"}
+kernel_sha=${kernel_sha:-""}
+initrd_sha=${initrd_sha:-""}
+next_kernel_params=${next_kernel_params:-"console=ttyS0"}
+
+echo "Kernel URL: $kernel_url"
+echo "Initrd URL: $initrd_url"
+echo "Kernel SHA: $kernel_sha"
+echo "Initrd SHA: $initrd_sha"
+echo "Next Kernel Params: $next_kernel_params"
+
+# Mount required filesystems
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev
+
+# Set up networking (assumes DHCP)
+busybox udhcpc -i eth0
+
+# Download the kernel and initrd using aria2
+aria2c --enable-dht --enable-peer-exchange \
+       --bt-seed-unverified=true \
+       --dir=/tmp \
+       --out=kernel "$kernel_url"
+aria2c --enable-dht --enable-peer-exchange \
+       --bt-seed-unverified=true \
+       --dir=/tmp \
+       --out=initrd.img "$initrd_url"
+
+# Verify SHA256 hashes if provided
+if [ -n "$kernel_sha" ]; then
+    echo "$kernel_sha  /tmp/kernel" | sha256sum -c -
+    if [ $? -ne 0 ]; then
+        echo "Kernel SHA256 verification failed!"
+        exit 1
+    fi
+fi
+
+if [ -n "$initrd_sha" ]; then
+    echo "$initrd_sha  /tmp/initrd.img" | sha256sum -c -
+    if [ $? -ne 0 ]; then
+        echo "Initrd SHA256 verification failed!"
+        exit 1
+    fi
+fi
+
+echo "SHA256 verification passed for both kernel and initrd."
+
+# Boot the downloaded kernel and initrd
+kexec -l /tmp/kernel --initrd=/tmp/initrd.img --append="$next_kernel_params"
+kexec -e
