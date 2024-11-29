@@ -30,7 +30,7 @@ A minimal initrd implementation using `aria2` for downloading files during the e
 
 ## License
 
-This project is licensed under the [MIT License](https://github.com/OpenCHAMI/.github/blob/main/LICENSE).
+This project is licensed under the [MIT License](LICENSE).
 
 ## Acknowledgments
 
