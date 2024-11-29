@@ -16,6 +16,64 @@ A minimal initrd implementation using `aria2` for downloading files during the e
 - **Diskless Systems:** Loading operating system components or tools directly into memory.
 - **Custom Deployment Workflows:** Downloading initialization resources for custom boot environments.
 
+## Getting Started
+
+### Prerequisites
+
+- Docker installed on your system.
+
+### Using the Pre-Built Container to Build the Initrd
+
+A pre-built container image is available on GitHub Container Registry (GHCR) to simplify the initrd building process.
+
+1. Pull the pre-built container:
+   ```bash
+   docker pull ghcr.io/openchami/aria2-initrd:latest
+   ```
+
+2. Run the container to build the initrd:
+   ```bash
+   docker run --rm -v "$(pwd)/output:/output" ghcr.io/openchami/aria2-initrd:latest
+   ```
+   The generated `initrd.img` will be located in the `output/` directory.
+
+3. Customize the kernel command line to include download parameters:
+   ```
+   initrd=initrd.img url=http://example.com/resource1,http://example.com/resource2
+   ```
+
+   Replace `http://example.com/resourceX` with the URLs of the files you want to download.
+
+### Kernel Parameters
+
+#### `url`
+Comma-separated list of URLs to download. Example:
+```
+url=http://example.com/file1,http://example.com/file2
+```
+
+#### `output_dir`
+Optional. Directory where files will be stored. Defaults to `/tmp`.
+
+#### `aria2_options`
+Optional. Custom aria2 options passed directly to the downloader. Example:
+```
+aria2_options="--max-concurrent-downloads=4 --timeout=60"
+```
+
+#### `next_kernel_params`
+This parameter allows you to specify kernel parameters for the next boot phase.
+
+Example:
+```
+next_kernel_params="url=http://example.com/new-initrd.img new_param=value quiet"
+```
+
+During the boot process, the initrd will:
+1. Parse `next_kernel_params` from the kernel command line.
+2. Pass these parameters to the next kernel during the next boot phase, enabling workflows such as:
+   - **Stateless Systems:** Dynamically configure the next kernel boot.
+   - **Multiphase Boot Scenarios:** Apply different parameters for subsequent boot phases.
 
 
 # Testing
