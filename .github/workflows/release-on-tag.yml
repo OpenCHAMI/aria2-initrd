@@ -15,7 +15,7 @@ jobs:
       attestations: write
     env:
         REGISTRY: ghcr.io
-        IMAGE_NAME: ${{ github.repository }}
+        IMAGE_NAME: openchai/aria2-initrd
 
     steps:
       - name: Checkout repository
