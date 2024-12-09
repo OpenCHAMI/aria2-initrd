@@ -37,6 +37,16 @@ RUN dnf install -y \
     which \
     xz \
     zlib-devel \
+    # Adding TPM2 tools dependencies
+    tpm2-tools \
+    tpm2-tss \
+    tpm2-abrmd \
+    trousers \
+    dbus \
+    # Additional tools
+    curl \
+    kexec-tools \
+    sudo \ 
     && dnf clean all
 
 # Create the directories we'll need
@@ -79,7 +89,12 @@ RUN git clone https://git.busybox.net/busybox \
 COPY build.sh /workspace/build.sh
 RUN mkdir -p /workspace/files/etc/
 COPY init /workspace/files/init
+# COPY tpm_init file
+COPY tpm_init.sh /workspace/tpm_init.sh
 COPY ./etc/resolv.conf /workspace/files/etc/resolv.conf
+# Create necessary directories and download ca-bundle.crt
+RUN mkdir -p /workspace/files/etc/ssl/ && \
+    wget -O /workspace/files/etc/ssl/ca-bundle.crt https://curl.se/ca/cacert.pem
 
 # Make the build script executable
 RUN chmod +x /workspace/build.sh

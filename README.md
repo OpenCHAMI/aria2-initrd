@@ -9,18 +9,21 @@ A minimal initrd implementation using `aria2` for downloading files during the e
 - **Lightweight Design:** Aimed at minimal environments, keeping the initrd as small as possible.
 - **Highly Configurable:** Supports passing custom download URLs and options through kernel parameters.
 - **Parallelism:** Leverages aria2's ability to perform concurrent downloads for faster bootstrapping.
+- **TPM Attestation Support:** Verifies the integrity of the boot process using TPM-based attestation.
 
 ## Use Cases
 
 - **HPC Cluster Bootstrapping:** Fetching configuration files or images for stateless node setups.
 - **Diskless Systems:** Loading operating system components or tools directly into memory.
 - **Custom Deployment Workflows:** Downloading initialization resources for custom boot environments.
+- **Secure Boot Environments:** Ensuring integrity with TPM attestation.
 
 ## Getting Started
 
 ### Prerequisites
 
 - Docker installed on your system.
+- For TPM attestation please ensure that TPM Attestation server is running. Look at [TPM-Attestation-Server](https://github.com/OpenCHAMI/aria2-initrd/attestation-server)
 
 ### Using the Pre-Built Container to Build the Initrd
 
@@ -61,6 +64,20 @@ Optional. Custom aria2 options passed directly to the downloader. Example:
 aria2_options="--max-concurrent-downloads=4 --timeout=60"
 ```
 
+#### `tpm_attestation`
+Optional. Enables TPM-based attestation when set to `1`. Example:
+```
+tpm_attestation=1
+```
+
+#### `attestation_server`
+Required if `tpm_attestation=1`. Specifies the server to which TPM attestation data will be sent. Example:
+```
+attestation_server=http://attestation.example.com
+```
+
+
+
 #### `next_kernel_params`
 This parameter allows you to specify kernel parameters for the next boot phase.
 
@@ -75,6 +92,13 @@ During the boot process, the initrd will:
    - **Stateless Systems:** Dynamically configure the next kernel boot.
    - **Multiphase Boot Scenarios:** Apply different parameters for subsequent boot phases.
 
+### TPM Attestation Workflow
+
+1. Parse kernel parameters (`tpm_attestation` and `attestation_server`).
+2. Initialize TPM and generate cryptographic keys.
+3. Collect PCR values and create a nonce for the attestation process.
+4. Generate a TPM quote and send it along with the attestation data to the specified `attestation_server`.
+5. If the server responds with "OK", the boot process continues. Otherwise, the system halts.
 
 # Testing
 
@@ -85,6 +109,14 @@ During the boot process, the initrd will:
 
 2. Monitor the output logs to confirm the download process.
 
+### Testing with TPM Attestation
+
+1. Run QEMU with attestation parameters:
+   ```bash
+   qemu-system-x86_64 -kernel /path/to/vmlinuz -initrd output/initrd.img -append "tpm_attestation=1 attestation_server=http://attestation.example.com url=http://example.com/resource"
+   ```
+
+2. Verify the attestation server receives the TPM quote and responds appropriately.
 
 ## License
 

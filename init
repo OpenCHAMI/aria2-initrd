@@ -1,76 +1,186 @@
 #!/bin/sh
 
-# Parse kernel command-line arguments
-for param in $(cat /proc/cmdline); do
-    case $param in
-        kernel_url=*)
-            kernel_url="${param#kernel_url=}"
-            ;;
-        initrd_url=*)
-            initrd_url="${param#initrd_url=}"
-            ;;
-        kernel_sha=*)
-            kernel_sha="${param#kernel_sha=}"
-            ;;
-        initrd_sha=*)
-            initrd_sha="${param#initrd_sha=}"
-            ;;
-        next_kernel_params=*)
-            next_kernel_params="${param#next_kernel_params=}"
-            ;;
-    esac
-done
+# Exit immediately if a command exits with a non-zero status
+set -e
 
-# Default values if not provided
-kernel_url=${kernel_url:-"https://default.example.com/kernel"}
-initrd_url=${initrd_url:-"https://default.example.com/initrd.img"}
-kernel_sha=${kernel_sha:-""}
-initrd_sha=${initrd_sha:-""}
-next_kernel_params=${next_kernel_params:-"console=ttyS0"}
+# Function to parse kernel command-line arguments into variables
+parse_cmdline() {
+    for param in $(cat /proc/cmdline); do
+        case "$param" in
+            *=*)
+                key=${param%%=*}
+                value=${param#*=}
+                case "$key" in
+                    kernel_url)          KERNEL_URL="$value" ;;
+                    initrd_url)          INITRD_URL="$value" ;;
+                    kernel_sha)          KERNEL_SHA="$value" ;;
+                    initrd_sha)          INITRD_SHA="$value" ;;
+                    next_kernel_params)  NEXT_KERNEL_PARAMS="$value" ;;
+                    tpm_attestation)     TPM_ATTESTATION="$value" ;;
+                    attestation_server)  ATTESTATION_SERVER="$value" ;;
+                esac
+                ;;
+        esac
+    done
+}
 
-echo "Kernel URL: $kernel_url"
-echo "Initrd URL: $initrd_url"
-echo "Kernel SHA: $kernel_sha"
-echo "Initrd SHA: $initrd_sha"
-echo "Next Kernel Params: $next_kernel_params"
+# Initialize variables with default values
+initialize_defaults() {
+    KERNEL_URL=${KERNEL_URL:-"https://default.example.com/kernel"}
+    INITRD_URL=${INITRD_URL:-"https://default.example.com/initrd.img"}
+    KERNEL_SHA=${KERNEL_SHA:-""}
+    INITRD_SHA=${INITRD_SHA:-""}
+    NEXT_KERNEL_PARAMS=${NEXT_KERNEL_PARAMS:-"console=ttyS0"}
+    TPM_ATTESTATION=${TPM_ATTESTATION:-0}
+    ATTESTATION_SERVER=${ATTESTATION_SERVER:-"https://attestation.server/verify"}
+}
 
 # Mount required filesystems
-mount -t proc none /proc
-mount -t sysfs none /sys
-mount -t devtmpfs none /dev
+mount_filesystems() {
+    mount -t proc none /proc
+    mount -t sysfs none /sys
+    mount -t devtmpfs none /dev
+    mount -t tmpfs tmpfs /run
+}
+
+# Start required daemons
+start_daemons() {
+    mkdir -p /var/run/dbus /tmp
+    echo "Starting D-Bus daemon..."
+    dbus-daemon --system --fork
+
+    echo "Starting tpm2-abrmd..."
+    tpm2-abrmd --allow-root --tcti=device &
+    TPM2_ABRMD_PID=$!
+}
+
+# Stop daemons and clean up
+stop_daemons() {
+    echo "Stopping tpm2-abrmd..."
+    kill "$TPM2_ABRMD_PID" || true
+    if [ -f /var/run/dbus/pid ]; then
+        DBUS_PID=$(cat /var/run/dbus/pid)
+        kill "$DBUS_PID" || true
+    fi
+}
+
+# Unmount filesystems
+unmount_filesystems() {
+    umount /proc || true
+    umount /sys || true
+    umount /dev || true
+    umount /run || true
+}
+
+#Validate Parameters
+validate_params() {
+    if [ -z "$KERNEL_URL" ]; then
+        echo "Error: KERNEL_URL is not set."
+        exit 1
+    fi
+    if [ -z "$INITRD_URL" ]; then
+        echo "Error: INITRD_URL is not set."
+        exit 1
+    fi
+    if [ "$TPM_ATTESTATION" = "1" ] && [ -z "$ATTESTATION_SERVER" ]; then
+        echo "Error: ATTESTATION_SERVER is required for TPM attestation."
+        exit 1
+    fi
+}
 
 # Set up networking (assumes DHCP)
-busybox udhcpc -i eth0
+setup_networking() {
+    echo "Setting up networking..."
+    busybox udhcpc -i eth0
+}
 
-# Download the kernel and initrd using aria2
-aria2c --enable-dht --enable-peer-exchange \
-       --bt-seed-unverified=true \
-       --dir=/tmp \
-       --out=kernel "$kernel_url"
-aria2c --enable-dht --enable-peer-exchange \
-       --bt-seed-unverified=true \
-       --dir=/tmp \
-       --out=initrd.img "$initrd_url"
+# Download files using aria2
+download_file() {
+    URL="$1"
+    OUTPUT="$2"
+    echo "Downloading $OUTPUT from $URL..."
+    aria2c --enable-dht --enable-peer-exchange \
+           --bt-seed-unverified=true \
+           --dir=/tmp \
+           --out="$OUTPUT" "$URL"
+}
 
-# Verify SHA256 hashes if provided
-if [ -n "$kernel_sha" ]; then
-    echo "$kernel_sha  /tmp/kernel" | sha256sum -c -
-    if [ $? -ne 0 ]; then
-        echo "Kernel SHA256 verification failed!"
-        exit 1
+# Verify file SHA256 hash
+verify_sha256() {
+    FILE="$1"
+    EXPECTED_SHA="$2"
+    echo "Verifying SHA256 for $FILE..."
+    echo "$EXPECTED_SHA  $FILE" | sha256sum -c -
+}
+
+cleanup() {
+    echo "Performing cleanup..."
+    stop_daemons
+    unmount_filesystems
+}
+
+
+
+# Main script execution
+main() {
+    trap cleanup EXIT
+    
+    parse_cmdline
+    initialize_defaults
+    validate_params
+
+    echo "Kernel URL: $KERNEL_URL"
+    echo "Initrd URL: $INITRD_URL"
+    echo "Kernel SHA: $KERNEL_SHA"
+    echo "Initrd SHA: $INITRD_SHA"
+    echo "Next Kernel Params: $NEXT_KERNEL_PARAMS"
+    echo "TPM Attestation: $TPM_ATTESTATION"
+
+    mount_filesystems
+    start_daemons
+
+    # Wait for daemons to be ready
+    sleep 1
+
+    # Perform TPM attestation if enabled
+    if [ "$TPM_ATTESTATION" = "1" ]; then
+        if [ -x /bin/tpm_init.sh ]; then
+            /bin/tpm_init.sh
+        else
+            echo "Error: TPM initialization script not found or not executable."
+            exit 1
+        fi
+    else
+        echo "TPM attestation is disabled. Proceeding without attestation."
     fi
-fi
 
-if [ -n "$initrd_sha" ]; then
-    echo "$initrd_sha  /tmp/initrd.img" | sha256sum -c -
-    if [ $? -ne 0 ]; then
-        echo "Initrd SHA256 verification failed!"
-        exit 1
+    setup_networking
+
+    # Download kernel and initrd
+    download_file "$KERNEL_URL" "kernel"
+    download_file "$INITRD_URL" "initrd.img"
+
+    # Verify SHA256 hashes if provided
+    if [ -n "$KERNEL_SHA" ]; then
+        verify_sha256 "/tmp/kernel" "$KERNEL_SHA"
     fi
-fi
 
-echo "SHA256 verification passed for both kernel and initrd."
+    if [ -n "$INITRD_SHA" ]; then
+        verify_sha256 "/tmp/initrd.img" "$INITRD_SHA"
+    fi
 
-# Boot the downloaded kernel and initrd
-kexec -l /tmp/kernel --initrd=/tmp/initrd.img --append="$next_kernel_params"
-kexec -e
+    echo "SHA256 verification passed for kernel and initrd."
+
+    # Clean up TPM resources
+    tpm2_flushcontext --transient-object
+
+    stop_daemons
+    unmount_filesystems
+
+    # Boot the downloaded kernel and initrd
+    echo "Booting the new kernel..."
+    kexec -l /tmp/kernel --initrd=/tmp/initrd.img --append="$NEXT_KERNEL_PARAMS"
+    kexec -e
+}
+
+main "$@"
