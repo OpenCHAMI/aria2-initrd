@@ -29,6 +29,12 @@ A minimal initrd implementation using `aria2` for downloading files during the e
 
 A pre-built container image is available on GitHub Container Registry (GHCR) to simplify the initrd building process.
 
+   > **Note:** Ensure that the container's architecture matches your kernel's architecture. For multi-architecture builds, use Docker Buildx to specify the appropriate platform. Example:
+   > ```bash
+   > docker buildx build --platform linux/amd64 -t aria2-initrd .
+   > ```
+
+
 1. Pull the pre-built container:
    ```bash
    docker pull ghcr.io/openchami/aria2-initrd:latest
