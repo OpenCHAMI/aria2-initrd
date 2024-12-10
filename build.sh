@@ -32,7 +32,7 @@ cp /usr/bin/tpm2_* initrd/usr/bin/
 cp /usr/bin/dbus-daemon initrd/usr/bin/
 
 # Copy tpm2-abrmd daemon
-cp /usr/sbin/tpm2-abrmd initrd/sbin/
+cp /usr/sbin/tpm2-abrmd initrd/usr/sbin/
 
 # Copy D-Bus system configuration
 cp /etc/dbus-1/system.conf initrd/etc/dbus-1/
