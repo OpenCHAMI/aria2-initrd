@@ -122,7 +122,8 @@ During the boot process, the initrd will:
    qemu-system-x86_64 -kernel /path/to/vmlinuz -initrd output/initrd.img -append "tpm_attestation=1 attestation_server=http://attestation.example.com url=http://example.com/resource"
    ```
 
-2. Verify the attestation server receives the TPM quote and responds appropriately.
+2. Verify the attestation server receives the TPM quote and continues with file download and chainloading process.
+
 
 ## License
 

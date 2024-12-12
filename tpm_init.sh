@@ -61,7 +61,7 @@ RESPONSE=$(curl -s -X POST \
     -F "nonce=$NONCE" \
     -F "pubkey=@/etc/tpm/attestation_key.pub" \
     -F "pcr_values=@/tmp/pcr_values.txt" \
-    "$ATTESTATION_SERVER")
+    "$ATTESTATION_SERVER/verify")
 
 if [ "$RESPONSE" = "OK" ]; then
     echo "TPM attestation successful."
