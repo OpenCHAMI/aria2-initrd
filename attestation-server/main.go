@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -29,6 +30,9 @@ type AttestationResponse struct {
 
 // PCRBaseline defines the expected PCR values (configured by the admin)
 var PCRBaseline map[string]string
+
+// Global flag for mock mode
+var mockMode bool
 
 // LoadPCRBaseline loads the expected PCR values from a JSON file
 func LoadPCRBaseline(filePath string) error {
@@ -119,7 +123,18 @@ func attestationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the quote
+	// If in mock mode, skip all verification and return success
+	if mockMode {
+		response := AttestationResponse{
+			Status:  "OK",
+			Message: "Mock mode: Verification skipped",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Otherwise, proceed with actual verification
 	valid, message := VerifyQuote(req)
 	response := AttestationResponse{
 		Status:  "FAIL",
@@ -136,10 +151,21 @@ func attestationHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	// Load PCR baseline
-	err := LoadPCRBaseline("pcr_values.json")
-	if err != nil {
-		log.Fatalf("Error loading PCR baseline: %v", err)
+	// command-line flag to enable mock mode
+	flag.BoolVar(&mockMode, "mock", false, "Run the attestation server in mock mode")
+	flag.Parse()
+
+	// Environment variable:
+	// if os.Getenv("MOCK_MODE") == "true" {
+	//     mockMode = true
+	// }
+
+	// If not in mock mode, load PCR baseline
+	if !mockMode {
+		err := LoadPCRBaseline("pcr_values.json")
+		if err != nil {
+			log.Fatalf("Error loading PCR baseline: %v", err)
+		}
 	}
 
 	http.HandleFunc("/verify", attestationHandler)

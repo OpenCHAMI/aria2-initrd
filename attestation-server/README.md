@@ -17,6 +17,18 @@ This project implements a TPM attestation server in Go. The server validates TPM
 2. The `tpm2-tools` suite for generating TPM quotes and PCR values.
 
 ---
+## Mock Mode (Testing Only)
+
+**What is Mock Mode?**  
+Mock mode allows the server to run without performing any actual TPM or PCR verification. All requests to the `/verify` endpoint will return a success response. This is useful when you need to test your integration or client logic without having a TPM available or worrying about PCR values.
+
+**How to Enable Mock Mode:**
+
+- **If Running Locally (without Docker)**:
+  ```bash
+  go run main.go --mock
+
+---
 
 ## Setting Up and Running the Server
 
@@ -57,7 +69,7 @@ docker run -d -p 5000:5000 --name tpm-attestation-server \
     tpm-attestation-server
 ```
 - The `-v` flag mounts the `pcr_values.json` file into the container.
-
+- The `--mock` flag runs the server in Mock mode for testing purposes. 
 ---
 
 ## Using the Server
