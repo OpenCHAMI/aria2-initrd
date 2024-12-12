@@ -22,6 +22,7 @@ RUN dnf install -y \
     gettext \
     gettext-devel \
     git \
+    glibc \
     glibc-static \
     gzip \
     kernel-devel \

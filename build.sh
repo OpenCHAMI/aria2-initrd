@@ -5,7 +5,7 @@ mkdir -p /workspace/output
 
 # Create initrd directory structure
 mkdir -p initrd/{bin,sbin,etc,proc,sys,dev,tmp,var,usr/{bin,sbin},lib,usr/lib}
-
+mkdir -p initrd/etc/dbus-1
 # Copy busybox and aria2 static binaries
 cp /workspace/files/bin/busybox initrd/bin/
 cp /workspace/files/bin/aria2c initrd/usr/bin/
@@ -37,6 +37,8 @@ cp /usr/sbin/tpm2-abrmd initrd/usr/sbin/
 # Copy D-Bus system configuration
 cp /etc/dbus-1/system.conf initrd/etc/dbus-1/
 
+cp /etc/dbus-1/system.conf initrd/usr/share/dbus-1
+
 # Copy necessary shared libraries for all binaries (copied earlier)
 function copy_libs {
     for bin in "$@"; do
@@ -51,6 +53,25 @@ copy_libs /workspace/files/bin/busybox \
           /usr/bin/tpm2_pcrread \
           /usr/bin/dbus-daemon \
           /usr/sbin/tpm2-abrmd
+
+echo "Checking if 'ldd' is functional..."
+ldd --version || { echo "ldd not found or not functional."; exit 1; }
+
+echo "Verifying dbus-daemon dependencies..."
+ldd /usr/bin/dbus-daemon
+
+echo "Copying dbus-daemon dependencies into initrd..."
+ldd /usr/bin/dbus-daemon | grep "=>" | awk '{print $3}' | xargs -I '{}' cp -v --parents '{}' initrd/
+
+# Ensure that the dynamic linker is copied:
+# This is often something like /lib64/ld-linux-x86-64.so.2
+if ! find initrd -name "ld-linux-*.so.*" | grep -q ld-linux; then
+    echo "Dynamic linker not found in initrd, copying it..."
+    LNK=$(ldd /usr/bin/dbus-daemon | grep 'ld-linux' | awk '{print $1}')
+    [ -n "$LNK" ] && cp -v --parents "$LNK" initrd/
+fi
+
+
 
 
 # Add init script and configuration
@@ -100,6 +121,7 @@ mkdir -p initrd/run
 chmod +x initrd/init
 chmod +x files/bin/*
 chmod +x initrd/usr/bin/*
+chmod +x initrd/usr/sbin/*
 chmod +x initrd/sbin/*
 chmod +x initrd/bin/tpm_init.sh
 
