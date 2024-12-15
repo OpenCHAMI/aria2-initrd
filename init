@@ -124,7 +124,7 @@ cleanup() {
 # Main script execution
 main() {
     trap cleanup EXIT
-    
+    mount_filesystems
     parse_cmdline
     initialize_defaults
     validate_params
@@ -136,7 +136,7 @@ main() {
     echo "Next Kernel Params: $NEXT_KERNEL_PARAMS"
     echo "TPM Attestation: $TPM_ATTESTATION"
 
-    mount_filesystems
+
     start_daemons
 
     # Wait for daemons to be ready

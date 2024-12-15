@@ -4,8 +4,22 @@
 mkdir -p /workspace/output
 
 # Create initrd directory structure
-mkdir -p initrd/{bin,sbin,etc,proc,sys,dev,tmp,var,usr/{bin,sbin},lib,usr/lib}
-mkdir -p initrd/etc/dbus-1
+mkdir -p initrd/{bin,sbin,etc,proc,sys,dev,tmp,var,usr/{bin,sbin,share},lib,usr/lib}
+mkdir -p initrd/usr/share/dbus-1
+
+# Create device nodes for TPM in the initrd
+mknod -m 666 initrd/dev/tpm0 c 10 224 || true
+mknod -m 666 initrd/dev/tpmrm0 c 10 232 || true
+
+# Create necessary directories for D-Bus and TPM2 Resource Manager
+
+mkdir -p initrd/run
+mkdir -p initrd/run/dbus
+
+
+# Create directories for TPM keys
+mkdir -p initrd/etc/tpm
+
 # Copy busybox and aria2 static binaries
 cp /workspace/files/bin/busybox initrd/bin/
 cp /workspace/files/bin/aria2c initrd/usr/bin/
@@ -18,6 +32,10 @@ for cmd in sh ls mkdir mount umount cat echo mknod ifconfig udhcpc wget \
     ln -s busybox $cmd
 done
 cd -
+
+# Create minimal /etc/passwd and /etc/group
+echo "root:x:0:0:root:/root:/bin/sh" > initrd/etc/passwd
+echo "root:x:0:" > initrd/etc/group
 
 # Copy kexec binary
 cp /usr/sbin/kexec initrd/sbin/
@@ -35,9 +53,7 @@ cp /usr/bin/dbus-daemon initrd/usr/bin/
 cp /usr/sbin/tpm2-abrmd initrd/usr/sbin/
 
 # Copy D-Bus system configuration
-cp /etc/dbus-1/system.conf initrd/etc/dbus-1/
-
-cp /etc/dbus-1/system.conf initrd/usr/share/dbus-1
+cp /usr/share/dbus-1/system.conf initrd/usr/share/dbus-1/
 
 # Copy necessary shared libraries for all binaries (copied earlier)
 function copy_libs {
@@ -109,13 +125,9 @@ mknod -m 666 initrd/dev/ptmx c 5 2
 
 
 
-# Create device nodes for TPM in the initrd
-mknod -m 666 initrd/dev/tpm0 c 10 224 || true
-mknod -m 666 initrd/dev/tpmrm0 c 10 232 || true
 
-# Create necessary directories for D-Bus and TPM2 Resource Manager
-mkdir -p initrd/var/run/dbus
-mkdir -p initrd/run
+
+
 
 # Ensure all binaries are executable
 chmod +x initrd/init
@@ -124,10 +136,12 @@ chmod +x initrd/usr/bin/*
 chmod +x initrd/usr/sbin/*
 chmod +x initrd/sbin/*
 chmod +x initrd/bin/tpm_init.sh
+chmod +x initrd/etc/tpm/*
+chmod +x initrd/usr/share/dbus-1/*
+chmod +x initrd/run/dbus/*
 
 
-# Create directories for TPM keys
-mkdir -p initrd/etc/tpm
+
 
 # Package initrd
 cd initrd
