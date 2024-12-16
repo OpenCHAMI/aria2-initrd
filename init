@@ -41,6 +41,8 @@ mount_filesystems() {
     mount -t sysfs none /sys
     mount -t devtmpfs none /dev
     mount -t tmpfs tmpfs /run
+    mknod -m 666 /dev/tpm0 c 10 224 || true 
+    mknod -m 666 /dev/tpmrm0 c 10 232 || true 
 }
 
 # Start required daemons
@@ -59,6 +61,11 @@ start_daemons() {
     echo "Contents of /etc/nsswitch.conf:"
     cat /etc/nsswitch.conf
     dbus-daemon --system --fork
+    sleep 5
+
+    ls -l /run/dbus/system_bus_socket
+    DBUS_PID=$! # Capture the PID
+    echo "D-Bus started with PID: $DBUS_PID"
 
     echo "Starting tpm2-abrmd..."
     tpm2-abrmd --allow-root --tcti=device &

@@ -21,6 +21,11 @@ mkdir -p initrd/var/run/dbus
 # Create directories for TPM keys
 mkdir -p initrd/etc/tpm
 
+echo "127.0.0.1 localhost" > initrd/etc/hosts
+
+#copy DBus Policy files
+mkdir -p initrd/usr/share/dbus-1/system.d/
+cp /usr/share/dbus-1/system-services/org.intel.tss2.Tabrmd.conf initrd/usr/share/dbus-1/system.d/
 # Copy busybox and aria2 static binaries
 cp /workspace/files/bin/busybox initrd/bin/
 cp /workspace/files/bin/aria2c initrd/usr/bin/
@@ -115,6 +120,8 @@ fi
 
 # Copy all libraries from /lib64 on the host to initrd/lib64
 cp -av /lib64/libnss* initrd/lib64/
+cp -av /lib64/libtss2* initrd/lib64/
+
 
 # Add init script and configuration
 cp /workspace/files/init initrd/
@@ -169,7 +176,6 @@ echo "Verifying directory structure:"
 ls -l initrd/etc/
 ls -l initrd/run/dbus
 ls -l initrd/var/run/dbus
-
 
 # Package initrd
 cd initrd
