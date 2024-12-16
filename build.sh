@@ -14,8 +14,9 @@ mknod -m 666 initrd/dev/tpmrm0 c 10 232 || true
 # Create necessary directories for D-Bus and TPM2 Resource Manager
 
 mkdir -p initrd/run
+mkdir -p initrd/var/run
 mkdir -p initrd/run/dbus
-
+mkdir -p initrd/var/run/dbus
 
 # Create directories for TPM keys
 mkdir -p initrd/etc/tpm
@@ -33,9 +34,6 @@ for cmd in sh ls mkdir mount umount cat echo mknod ifconfig udhcpc wget \
 done
 cd -
 
-# Create minimal /etc/passwd and /etc/group
-echo "root:x:0:0:root:/root:/bin/sh" > initrd/etc/passwd
-echo "root:x:0:" > initrd/etc/group
 
 # Copy kexec binary
 cp /usr/sbin/kexec initrd/sbin/
@@ -55,12 +53,40 @@ cp /usr/sbin/tpm2-abrmd initrd/usr/sbin/
 # Copy D-Bus system configuration
 cp /usr/share/dbus-1/system.conf initrd/usr/share/dbus-1/
 
+
+
+# Create and modify D-Bus system configuration to run as root
+cp /usr/share/dbus-1/system.conf initrd/usr/share/dbus-1/system.conf
+sed -i 's/<user>dbus<\/user>/<user>root<\/user>/' initrd/usr/share/dbus-1/system.conf
+
+# Create minimal /etc/passwd and /etc/group
+echo "root:x:0:0:root:/root:/bin/sh" > initrd/etc/passwd
+echo "root:x:0:" > initrd/etc/group
+
+# Add minimal nsswitch.conf for user lookup
+echo "passwd: files" > initrd/etc/nsswitch.conf
+echo "group: files" >> initrd/etc/nsswitch.conf
+
 # Copy necessary shared libraries for all binaries (copied earlier)
+
 function copy_libs {
     for bin in "$@"; do
         ldd "$bin" | grep "=>" | awk '{print $3}' | xargs -I '{}' cp -v --parents '{}' initrd/
+	for lib_dir in $host_lib_dir; do
+            find "$lib_dir" -name "libnss*" -print0 | while IFS= read -r -d $'\0' lib; do
+                if [ -f "$lib" ]; then
+                    cp -v --parents "$lib" initrd/
+                    ldd "$lib" 2>/dev/null | grep "=>" | awk '{print $3}' | while read -r dep; do
+                        if [ -f "$dep" ]; then
+                           cp -v --parents "$dep" initrd/
+                        fi
+                    done
+                fi
+            done
+        done
     done
 }
+
 
 copy_libs /workspace/files/bin/busybox \
           /workspace/files/bin/aria2c \
@@ -87,8 +113,8 @@ if ! find initrd -name "ld-linux-*.so.*" | grep -q ld-linux; then
     [ -n "$LNK" ] && cp -v --parents "$LNK" initrd/
 fi
 
-
-
+# Copy all libraries from /lib64 on the host to initrd/lib64
+cp -av /lib64/libnss* initrd/lib64/
 
 # Add init script and configuration
 cp /workspace/files/init initrd/
@@ -126,9 +152,6 @@ mknod -m 666 initrd/dev/ptmx c 5 2
 
 
 
-
-
-
 # Ensure all binaries are executable
 chmod +x initrd/init
 chmod +x files/bin/*
@@ -136,11 +159,16 @@ chmod +x initrd/usr/bin/*
 chmod +x initrd/usr/sbin/*
 chmod +x initrd/sbin/*
 chmod +x initrd/bin/tpm_init.sh
-chmod +x initrd/etc/tpm/*
 chmod +x initrd/usr/share/dbus-1/*
-chmod +x initrd/run/dbus/*
+chmod +x initrd/etc/passwd
+chmod +x initrd/etc/group
 
 
+# Verify directory structure
+echo "Verifying directory structure:"
+ls -l initrd/etc/
+ls -l initrd/run/dbus
+ls -l initrd/var/run/dbus
 
 
 # Package initrd
@@ -149,4 +177,3 @@ find . | cpio -o -H newc | gzip > /workspace/output/custom-initrd.img
 cd ..
 
 echo "custom-initrd.img created successfully in /workspace/output/"
-

@@ -46,7 +46,18 @@ mount_filesystems() {
 # Start required daemons
 start_daemons() {
     mkdir -p /var/run/dbus /tmp
+    mkdir -p /run/dbus /tmp
     echo "Starting D-Bus daemon..."
+    #dbus-daemon --system --fork
+    # Debug: List /etc/passwd and /etc/group for verification
+    echo "Contents of /etc/passwd:"
+    cat /etc/passwd
+
+    echo "Contents of /etc/group:"
+    cat /etc/group
+
+    echo "Contents of /etc/nsswitch.conf:"
+    cat /etc/nsswitch.conf
     dbus-daemon --system --fork
 
     echo "Starting tpm2-abrmd..."

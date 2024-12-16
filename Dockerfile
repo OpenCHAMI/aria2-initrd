@@ -44,6 +44,7 @@ RUN dnf install -y \
     tpm2-abrmd \
     trousers \
     dbus \
+    dbus-x11 \
     # Additional tools
     curl \
     kexec-tools \
